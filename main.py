@@ -1,3 +1,5 @@
+from curses.textpad import rectangle
+
 import pygame
 import numpy as np
 
@@ -11,6 +13,7 @@ camera = [world_height/2, world_height/2]
 
 n = 10
 background_colour = (20,20,40)
+world_colour = (40, 40, 80,)
 r = 5
 
 pygame.init()
@@ -44,8 +47,14 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Fill screen colour
+    # Draw background
     screen.fill(background_colour)
+    pygame.draw.rect(screen, world_colour, [
+        camera[0]/2,
+        camera[1]/2,
+        world_width,
+        world_height
+    ])
 
     # Clamp particle positions
     positions[:, 0] = np.clip(positions[:, 0], r, world_width - r)
