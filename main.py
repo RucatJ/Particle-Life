@@ -4,6 +4,7 @@ import numpy as np
 world_width = 600
 world_height = 400
 n = 10
+background_colour = (20,20,40)
 
 pygame.init()
 
@@ -14,8 +15,8 @@ running = True
 # Initialize arrays with random values
 
 positions = np.column_stack([
-    np.random.uniform(0, world_height, n),
-    np.random.uniform(0, world_width, n)
+    np.random.uniform(0, world_width, n),
+    np.random.uniform(0, world_height, n)
 ])
 print(positions)
 
@@ -29,5 +30,14 @@ while running:
         # Check for quit
         if event.type == pygame.QUIT:
             running = False
+
+    screen.fill(background_colour)
+
+    # Draw particles
+
+    for p in positions:
+        pygame.draw.circle(screen, (255, 0, 0), (int(p[0]), int(p[1])), 5)
+
+    pygame.display.update()
 
 pygame.quit()
