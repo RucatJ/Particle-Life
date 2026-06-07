@@ -1,6 +1,7 @@
 import pygame
 import numpy as np
-from math import floor, ceil
+from math import floor, sqrt, ceil
+from numba import jit
 
 world_width = 800
 world_height = 800
@@ -9,18 +10,18 @@ screen_width = 1000
 screen_height = 1000
 
 # Interaction limits
-max_dist = 150
-min_dist = 10
+max_dist = 50
+min_dist = 4
 
 camera = [(screen_width - world_width) / 2, (screen_height - world_height) / 2]
 
-n = 500
+n = 800
 background_colour = (20,20,40)
 world_colour = (40, 40, 80,)
-r = 3
-force_scale = 0.1
+r = 2
+force_scale = 0.2
 
-type_count = 6
+type_count = 12
 colours = np.random.uniform(0,255, (type_count, 3))
 
 pygame.init()
@@ -37,20 +38,6 @@ print(force_matrix)
 
 # Initialize all particles
 
-particles = np.column_stack([
-    # Positions
-    np.random.uniform(0, world_width, n),
-    np.random.uniform(0, world_height, n),
-    # Velocities
-    np.random.uniform(-1, 1, n),
-    np.random.uniform(-1, 1, n),
-    # Types
-    np.random.randint(0, type_count, n),
-    # Grid cell
-    np.zeros(n),
-    np.zeros(n)
-])
-
 positions = np.column_stack([
     np.random.uniform(0, world_width, n),
     np.random.uniform(0, world_height, n)
@@ -65,7 +52,7 @@ types = np.random.randint(0, type_count, n)
 
 cell = np.zeros((n, 2))
 
-print(cell)
+# print(cell)
 
 clock = pygame.time.Clock()
 
@@ -91,6 +78,10 @@ while running:
     # Toroidal world
     positions[:, 0] = positions[:, 0] % world_width
     positions[:, 1] = positions[:, 1] % world_height
+
+    # Clamp particle positions
+    # positions[:, 0] = np.clip(positions[:, 0], 0, world_width)
+    # positions[:, 1] = np.clip(positions[:, 1], 0, world_height)
 
     # Draw particles
 
@@ -125,50 +116,79 @@ while running:
         cell[i][0] = cell_y
         cell[i][1] = cell_x
 
+    gr = ceil(world_height / max_dist)
+    gc = ceil(world_width / max_dist)
+
+    max_dist_sq = max_dist**2
+    min_dist_sq = min_dist**2
+
     # Particle interactions (where it all goes wrong)
+
     for i, p in enumerate(positions):
-        for dy in (-1, 0, 1):
-                for dx in (-1, 0 ,1):
-                    if (int(cell[i][0] + dy), int(cell[i][1] + dx)) in grid.keys():
-                        for _i in grid[(int(cell[i][0] + dy), int(cell[i][1] + dx))]:
-                            _p = particles[_i]
+        for dcy in (-1, 0, 1):
+                for dcx in (-1, 0 ,1):
+                    index = (int((cell[i][0] + dcy) % gr),
+                            int((cell[i][1] + dcx) % gc)
+                    )
 
-                            force = [0, 0]
+                    if index in grid:
+                        for _i in grid[index]:
 
-                            diff_vect = [p[0] - positions[_i][0], p[1] - positions[_i][1]]
-                            square_diff = diff_vect[0]**2 + diff_vect[1]**2
-
-                            if not square_diff:
+                            if i == _i:
                                 continue
 
+                            _p = positions[_i]
+
+                            fx = 0
+                            fy = 0
+
+                            dx = positions[_i][0] - p[0]
+                            dy = positions[_i][1] - p[1]
+
+                            if dx > world_width / 2:
+                                dx -= world_width
+                            elif dx < -world_width / 2:
+                                dx += world_width
+
+                            if dy > world_height / 2:
+                                dy -= world_height
+                            elif dy < -world_height / 2:
+                                dy += world_height
+
+                            square_diff = dx**2 + dy**2
+
                             # print(diff)
-                            if not max_dist**2 <= square_diff and not min_dist**2 >= square_diff:
-                                diff = np.linalg.norm(diff_vect)
-                                norm = [diff_vect[0] / diff, diff_vect[1] / diff]
+                            if not max_dist_sq <= square_diff and not min_dist_sq >= square_diff:
+                                diff = sqrt(square_diff)
+                                norm_x = dx / diff
+                                norm_y = dy / diff
 
-                                force = force_matrix[int(types[i])][int(types[_i])] * ((max_dist/2 - abs(max_dist/2 - (diff - min_dist)))/(max_dist/2))
+                                force = force_matrix[int(types[_i])][int(types[i])] * ((max_dist/2 - abs(max_dist/2 - (diff - min_dist)))/(max_dist/2))
 
-                                force = [force * norm[0], force * norm[1]]
+                                fx = force * norm_x
+                                fy = force * norm_y
                                 # print(force)
 
-                                # print(force)
-                            elif square_diff <= min_dist**2:
-                                diff = np.linalg.norm(diff_vect)
-                                norm = [diff_vect[0] / diff, diff_vect[1] / diff]
+                            elif square_diff <= min_dist_sq:
+                                diff = sqrt(square_diff)
+                                norm_x = dx / diff
+                                norm_y = dy / diff
 
-                                force = -((diff - min_dist)/2)**2
-                                force = [force * norm[0], force * norm[1]]
+                                force = (diff - min_dist) * 2.5
 
-                            velocities[_i][0] += force[0] * force_scale
-                            velocities[_i][1] += force[1] * force_scale
+                                fx = force * norm_x
+                                fy = force * norm_y
+
+                            velocities[i][0] += fx * force_scale
+                            velocities[i][1] += fy * force_scale
 
     # Update particle positions
     positions[:, 0] += velocities[:, 0]
     positions[:, 1] += velocities[:, 1]
 
     # Slightly dampen velocities over time
-    velocities[:, 0] *= 0.95
-    velocities[:, 1] *= 0.95
+    velocities[:, 0] *= 0.8
+    velocities[:, 1] *= 0.8
 
     # Update screen
     pygame.display.update()
