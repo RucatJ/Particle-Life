@@ -10,16 +10,16 @@ screen_width = 1000
 screen_height = 1000
 
 # Interaction limits
-max_dist = 50
-min_dist = 4
+max_dist = 150
+min_dist = 10
 
 camera = [(screen_width - world_width) / 2, (screen_height - world_height) / 2]
 
-n = 800
+n = 300
 background_colour = (20,20,40)
 world_colour = (40, 40, 80,)
-r = 2
-force_scale = 0.2
+r = 4
+force_scale = 0.15
 
 type_count = 12
 colours = np.random.uniform(0,255, (type_count, 3))
@@ -27,6 +27,7 @@ colours = np.random.uniform(0,255, (type_count, 3))
 pygame.init()
 
 screen = pygame.display.set_mode((screen_width,screen_height))
+pygame.display.set_caption("Epic Simulation :)")
 
 running = True
 
@@ -34,7 +35,7 @@ running = True
 
 force_matrix = np.random.uniform(-1, 1, (type_count, type_count))
 
-print(force_matrix)
+# print(force_matrix)
 
 # Initialize all particles
 
@@ -97,11 +98,11 @@ while running:
             int(p[1] + camera[1])
         )
 
-        pygame.draw.circle(screen, colours[int(types[i])-1], position, r)
+        pygame.draw.circle(screen, colours[int(types[i])], position, r)
 
     # Create grid and add all particles to grid
 
-    grid = {}
+    grid = [[[] for i in range(ceil(world_width / max_dist))] for i in range(ceil(world_height / max_dist))]
 
     # print(grid)
 
@@ -111,10 +112,10 @@ while running:
 
         # print(p[0], cell_x, p[1], cell_y)
 
-        grid.setdefault((cell_y, cell_x), []).append(i)
+        grid[cell_y][cell_x].append(i)
 
-        cell[i][0] = cell_y
-        cell[i][1] = cell_x
+        cell[i][0] = cell_x
+        cell[i][1] = cell_y
 
     gr = ceil(world_height / max_dist)
     gc = ceil(world_width / max_dist)
@@ -127,12 +128,12 @@ while running:
     for i, p in enumerate(positions):
         for dcy in (-1, 0, 1):
                 for dcx in (-1, 0 ,1):
-                    index = (int((cell[i][0] + dcy) % gr),
-                            int((cell[i][1] + dcx) % gc)
-                    )
+                    ix = int((cell[i][0] + dcy) % gr)
+                    iy = int((cell[i][1] + dcx) % gc)
 
-                    if index in grid:
-                        for _i in grid[index]:
+                    if ix < gr and iy < gc:
+                        # print(len(grid[iy][ix]))
+                        for _i in grid[iy][ix]:
 
                             if i == _i:
                                 continue
@@ -158,7 +159,7 @@ while running:
                             square_diff = dx**2 + dy**2
 
                             # print(diff)
-                            if not max_dist_sq <= square_diff and not min_dist_sq >= square_diff:
+                            if min_dist_sq <= square_diff <= max_dist_sq:
                                 diff = sqrt(square_diff)
                                 norm_x = dx / diff
                                 norm_y = dy / diff
@@ -187,8 +188,8 @@ while running:
     positions[:, 1] += velocities[:, 1]
 
     # Slightly dampen velocities over time
-    velocities[:, 0] *= 0.8
-    velocities[:, 1] *= 0.8
+    velocities[:, 0] *= 0.9
+    velocities[:, 1] *= 0.9
 
     # Update screen
     pygame.display.update()
