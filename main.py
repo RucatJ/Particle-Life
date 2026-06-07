@@ -15,11 +15,11 @@ min_dist = 10
 
 camera = [(screen_width - world_width) / 2, (screen_height - world_height) / 2]
 
-n = 300
+n = 1000
 background_colour = (20,20,40)
 world_colour = (40, 40, 80,)
 r = 4
-force_scale = 0.15
+force_scale = 0.05
 
 type_count = 12
 colours = np.random.uniform(0,255, (type_count, 3))
@@ -100,88 +100,37 @@ while running:
 
         pygame.draw.circle(screen, colours[int(types[i])], position, r)
 
-    # Create grid and add all particles to grid
-
-    grid = [[[] for i in range(ceil(world_width / max_dist))] for i in range(ceil(world_height / max_dist))]
-
-    # print(grid)
-
-    for i, p in enumerate(positions):
-        cell_x = floor(p[0] / max_dist)
-        cell_y = floor(p[1] / max_dist)
-
-        # print(p[0], cell_x, p[1], cell_y)
-
-        grid[cell_y][cell_x].append(i)
-
-        cell[i][0] = cell_x
-        cell[i][1] = cell_y
-
-    gr = ceil(world_height / max_dist)
-    gc = ceil(world_width / max_dist)
-
     max_dist_sq = max_dist**2
     min_dist_sq = min_dist**2
 
     # Particle interactions (where it all goes wrong)
 
     for i, p in enumerate(positions):
-        for dcy in (-1, 0, 1):
-                for dcx in (-1, 0 ,1):
-                    ix = int((cell[i][0] + dcy) % gr)
-                    iy = int((cell[i][1] + dcx) % gc)
+        deltas = positions - positions[i]
+        dx = deltas[:, 0]
+        dy = deltas[:, 1]
 
-                    if ix < gr and iy < gc:
-                        # print(len(grid[iy][ix]))
-                        for _i in grid[iy][ix]:
+        dx = np.where(dx > world_width / 2, dx - world_width, dx)
+        dx = np.where(dx < -world_width / 2, dx + world_width, dx)
+        dy = np.where(dy > world_height / 2, dy - world_height, dy)
+        dy = np.where(dy < -world_height / 2, dy + world_height, dy)
 
-                            if i == _i:
-                                continue
+        sq_dists = dx**2 + dy**2
+        dists = np.sqrt(np.maximum(sq_dists, 1e-10))
 
-                            _p = positions[_i]
+        lr_mask = (sq_dists >= min_dist_sq) & (sq_dists <= max_dist_sq)
+        sr_mask = (sq_dists < min_dist_sq) & (sq_dists > 0)
 
-                            fx = 0
-                            fy = 0
+        forces = np.zeros(n)
+        d = dists[lr_mask]
+        forces[lr_mask] = force_matrix[types[i], types][lr_mask] * ((max_dist/2 - np.abs(max_dist/2 - (d - min_dist))) / (max_dist/2))
+        forces[sr_mask] = (dists[sr_mask] - min_dist) * 2.5
 
-                            dx = positions[_i][0] - p[0]
-                            dy = positions[_i][1] - p[1]
+        norm_x = dx / dists
+        norm_y = dy / dists
 
-                            if dx > world_width / 2:
-                                dx -= world_width
-                            elif dx < -world_width / 2:
-                                dx += world_width
-
-                            if dy > world_height / 2:
-                                dy -= world_height
-                            elif dy < -world_height / 2:
-                                dy += world_height
-
-                            square_diff = dx**2 + dy**2
-
-                            # print(diff)
-                            if min_dist_sq <= square_diff <= max_dist_sq:
-                                diff = sqrt(square_diff)
-                                norm_x = dx / diff
-                                norm_y = dy / diff
-
-                                force = force_matrix[int(types[_i])][int(types[i])] * ((max_dist/2 - abs(max_dist/2 - (diff - min_dist)))/(max_dist/2))
-
-                                fx = force * norm_x
-                                fy = force * norm_y
-                                # print(force)
-
-                            elif square_diff <= min_dist_sq:
-                                diff = sqrt(square_diff)
-                                norm_x = dx / diff
-                                norm_y = dy / diff
-
-                                force = (diff - min_dist) * 2.5
-
-                                fx = force * norm_x
-                                fy = force * norm_y
-
-                            velocities[i][0] += fx * force_scale
-                            velocities[i][1] += fy * force_scale
+        velocities[i][0] += np.sum(forces * norm_x) * force_scale
+        velocities[i][1] += np.sum(forces * norm_y) * force_scale
 
     # Update particle positions
     positions[:, 0] += velocities[:, 0]
