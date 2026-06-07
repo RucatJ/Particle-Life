@@ -51,7 +51,21 @@ particles = np.column_stack([
     np.zeros(n)
 ])
 
-# print(particles)
+positions = np.column_stack([
+    np.random.uniform(0, world_width, n),
+    np.random.uniform(0, world_height, n)
+])
+
+velocities = np.column_stack([
+    np.random.uniform(-1, 1, n),
+    np.random.uniform(-1, 1, n)
+])
+
+types = np.random.randint(0, type_count, n)
+
+cell = np.zeros((n, 2))
+
+print(cell)
 
 clock = pygame.time.Clock()
 
@@ -75,12 +89,12 @@ while running:
     ])
 
     # Toroidal world
-    particles[:, 0] = particles[:, 0] % world_width
-    particles[:, 1] = particles[:, 1] % world_height
+    positions[:, 0] = positions[:, 0] % world_width
+    positions[:, 1] = positions[:, 1] % world_height
 
     # Draw particles
 
-    for p in particles:
+    for i, p in enumerate(positions):
         # print(p, camera)
         # position = (
         #     int(p[0] % world_width + camera[0]),
@@ -92,7 +106,7 @@ while running:
             int(p[1] + camera[1])
         )
 
-        pygame.draw.circle(screen, colours[int(p[4])-1], position, r)
+        pygame.draw.circle(screen, colours[int(types[i])-1], position, r)
 
     # Create grid and add all particles to grid
 
@@ -100,7 +114,7 @@ while running:
 
     # print(grid)
 
-    for i, p in enumerate(particles):
+    for i, p in enumerate(positions):
         cell_x = floor(p[0] / max_dist)
         cell_y = floor(p[1] / max_dist)
 
@@ -108,20 +122,20 @@ while running:
 
         grid.setdefault((cell_y, cell_x), []).append(i)
 
-        p[5] = cell_y
-        p[6] = cell_x
+        cell[i][0] = cell_y
+        cell[i][1] = cell_x
 
     # Particle interactions (where it all goes wrong)
-    for p in particles:
+    for i, p in enumerate(positions):
         for dy in (-1, 0, 1):
                 for dx in (-1, 0 ,1):
-                    if (int(p[5] + dy), int(p[6] + dx)) in grid.keys():
-                        for i in grid[(int(p[5] + dy), int(p[6] + dx))]:
-                            _p = particles[i]
+                    if (int(cell[i][0] + dy), int(cell[i][1] + dx)) in grid.keys():
+                        for _i in grid[(int(cell[i][0] + dy), int(cell[i][1] + dx))]:
+                            _p = particles[_i]
 
                             force = [0, 0]
 
-                            diff_vect = [p[0] - _p[0], p[1] - _p[1]]
+                            diff_vect = [p[0] - positions[_i][0], p[1] - positions[_i][1]]
                             square_diff = diff_vect[0]**2 + diff_vect[1]**2
 
                             if not square_diff:
@@ -132,7 +146,8 @@ while running:
                                 diff = np.linalg.norm(diff_vect)
                                 norm = [diff_vect[0] / diff, diff_vect[1] / diff]
 
-                                force = force_matrix[int(p[4])][int(_p[4])] * ((max_dist/2 - abs(max_dist/2 - (diff - min_dist)))/(max_dist/2))
+                                force = force_matrix[int(types[i])][int(types[_i])] * ((max_dist/2 - abs(max_dist/2 - (diff - min_dist)))/(max_dist/2))
+
                                 force = [force * norm[0], force * norm[1]]
                                 # print(force)
 
@@ -144,20 +159,20 @@ while running:
                                 force = -((diff - min_dist)/2)**2
                                 force = [force * norm[0], force * norm[1]]
 
-                            _p[2] += force[0] * force_scale
-                            _p[3] += force[1] * force_scale
+                            velocities[_i][0] += force[0] * force_scale
+                            velocities[_i][1] += force[1] * force_scale
 
     # Update particle positions
-    particles[:, 0] += particles[:, 2]
-    particles[:, 1] += particles[:, 3]
+    positions[:, 0] += velocities[:, 0]
+    positions[:, 1] += velocities[:, 1]
 
     # Slightly dampen velocities over time
-    particles[:, 2] *= 0.95
-    particles[:, 3] *= 0.95
+    velocities[:, 0] *= 0.95
+    velocities[:, 1] *= 0.95
 
     # Update screen
     pygame.display.update()
-    clock.tick(60)
+    clock.tick(30)
 
 print(grid)
 
