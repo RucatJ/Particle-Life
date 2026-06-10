@@ -2,12 +2,36 @@ import pygame
 import numpy as np
 import pyopencl as cl
 
-platform = cl.get_platforms()[0]
-device = platform.get_devices()[0]
+platforms = cl.get_platforms()
+
+choice = 0
+
+# list things
+for i, p in enumerate(cl.get_platforms()):
+    print(f"{i}: " + p.name)
+    for d in p.get_devices():
+        print("    " + d.name)
+
+if len(platforms) > 1:
+    choice = input("Select platform: ")
+    if not choice:
+        choice = 0
+    else:
+        try:
+            choice = int(choice)
+        except ValueError:
+            print("That's not an integer")
+            quit()
+
+device = platforms[choice].get_devices()[0]
+
+print("\nUsing: " + device.name)
+
 ctx = cl.Context([device])
 queue = cl.CommandQueue(ctx)
 
-seed = input("Select seed: ")
+
+seed = input("\nSelect seed: ")
 if not seed:
     seed = np.random.randint(0, 999999999)
 else:
@@ -19,14 +43,6 @@ else:
 
 print(f"Seed: {seed}")
 np.random.seed(seed)
-
-# list things
-for p in cl.get_platforms():
-    print(p.name)
-    for d in p.get_devices():
-        print("    " + d.name)
-
-print(device.name)
 
 world_width = 1200
 world_height = 1000
@@ -41,11 +57,12 @@ density_limit = 0.2
 
 camera = [(screen_width - world_width) / 2, (screen_height - world_height) / 2]
 
-n = 6000
+n = 14000
 background_colour = (20,20,40)
 world_colour = (40, 40, 80,)
 r = 1
 force_scale = 0.01
+velocity_damping = 0.9
 
 type_count = 12
 colours = np.random.uniform(0,255, (type_count, 3))
@@ -101,10 +118,10 @@ fm32 = force_matrix.astype(np.float32).flatten()
 # The mf variable just has all the flags (classes) such as cl.mem_flags.READ_ONLY now becomes mf.READ_ONLY
 mf = cl.mem_flags
 
-pos_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=pos32)
 types_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=types32)
 fm_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=fm32)
 vel_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=vel32)
+pos_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=pos32)
 
 kernel_code = open("kernel.c", "r").read()
 
@@ -172,52 +189,13 @@ while running:
         np.float32(min_dist),
         np.int32(type_count),
         np.float32(force_scale),
-        np.float32(density_limit)
+        np.float32(density_limit),
+        np.float32(velocity_damping)
     )
 
-    cl.enqueue_copy(queue, vel32, vel_buf)
+    cl.enqueue_copy(queue, pos32, pos_buf)
     queue.finish()
-    velocities = vel32
-
-    # for i, p in enumerate(positions):
-    #     deltas = positions - positions[i]
-    #     dx = deltas[:, 0]
-    #     dy = deltas[:, 1]
-    #
-    #     dx = np.where(dx > world_width / 2, dx - world_width, dx)
-    #     dx = np.where(dx < -world_width / 2, dx + world_width, dx)
-    #     dy = np.where(dy > world_height / 2, dy - world_height, dy)
-    #     dy = np.where(dy < -world_height / 2, dy + world_height, dy)
-    #
-    #     sq_dists = dx**2 + dy**2
-    #     dists = np.sqrt(np.maximum(sq_dists, 1e-10))
-    #
-    #     lr_mask = (sq_dists >= min_dist_sq) & (sq_dists <= max_dist_sq)
-    #     sr_mask = (sq_dists < min_dist_sq) & (sq_dists > 0)
-    #
-    #     forces = np.zeros(n)
-    #     d = dists[lr_mask]
-    #     forces[lr_mask] = force_matrix[types[i], types][lr_mask] * ((max_dist/2 - np.abs(max_dist/2 - (d - min_dist))) / (max_dist/2))
-    #     forces[sr_mask] = (dists[sr_mask] - min_dist) * 5
-    #
-    #     norm_x = dx / dists
-    #     norm_y = dy / dists
-    #
-    #     fx, fy =  np.sum(forces * norm_x), np.sum(forces * norm_y)
-    #
-    #     velocities[i][0] +=  fx * force_scale
-    #     velocities[i][1] +=  fy * force_scale
-
-    # Slightly dampen velocities over time
-    velocities[:, 0] *= 0.8
-    velocities[:, 1] *= 0.8
-
-    vel32 = velocities.astype(np.float32)
-    cl.enqueue_copy(queue, vel_buf, vel32)
-
-    # Update particle positions
-    positions[:, 0] += velocities[:, 0]
-    positions[:, 1] += velocities[:, 1]
+    positions = pos32
 
     pos32 = positions.astype(np.float32)
     cl.enqueue_copy(queue, pos_buf, pos32)

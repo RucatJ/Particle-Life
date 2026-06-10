@@ -13,7 +13,8 @@ __kernel void update(
     float min_dist,
     int type_count,
     float force_scale,
-    float density_limit
+    float density_limit,
+    float velocity_damping
 ) {
     int i = get_global_id(0);
     if (i >= n) return;
@@ -65,14 +66,18 @@ __kernel void update(
         fy_total += norm_y * force;
     }
     
-    local_density /= local_n;
-    
-    float density_factor = 1.0f - min(max(0.0f, local_density - density_limit), 1.005f);
+    // float density_factor = min(max(0.0f, local_density - density_limit), 1.005f);
+    float density_factor = 1.0f;
     
     fx_total *= density_factor;
     fy_total *= density_factor;
     
     velocities[i].x += fx_total * force_scale;
     velocities[i].y += fy_total * force_scale;
-    
+
+    velocities[i].x *= velocity_damping;
+    velocities[i].y *= velocity_damping;
+
+    positions[i].x += velocities[i].x;
+    positions[i].y += velocities[i].y;
 }
