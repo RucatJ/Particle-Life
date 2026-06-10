@@ -51,7 +51,7 @@ screen_width = 1300
 screen_height = 1100
 
 # Interaction limits
-max_dist = 120
+max_dist = 100
 min_dist = 5
 density_limit = 0.3
 
@@ -207,6 +207,6 @@ while running:
 
     # Update screen
     pygame.display.update()
-    clock.tick(30)
+    clock.tick(60)
 
 pygame.quit()

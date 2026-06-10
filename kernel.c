@@ -25,6 +25,8 @@ __kernel void update(
     
     float local_density = 0.0f;
     float local_n = 1.0f;
+
+    float velocity_limit = max_dist * 0.8f;
     
     for (int j = 0; j < n; j++) {
         if (i == j) continue;
@@ -81,8 +83,8 @@ __kernel void update(
     velocities[i].x *= velocity_damping;
     velocities[i].y *= velocity_damping;
 
-    velocities[i].x = min(max(velocities[i].x, -max_dist), max_dist);
-    velocities[i].y = min(max(velocities[i].y, -max_dist), max_dist);
+    velocities[i].x = min(max(velocities[i].x, -velocity_limit), velocity_limit);
+    velocities[i].y = min(max(velocities[i].y, -velocity_limit), velocity_limit);
 
     positions[i].x += velocities[i].x;
     positions[i].y += velocities[i].y;
