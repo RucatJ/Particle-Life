@@ -24,7 +24,7 @@ __kernel void update(
     float fy_total = 0.0f;
     
     float local_density = 0.0f;
-    float local_n = 0;
+    float local_n = 1.0f;
     
     for (int j = 0; j < n; j++) {
         if (i == j) continue;
@@ -39,21 +39,23 @@ __kernel void update(
         
         float dist_sq = dx*dx + dy*dy;
         if (dist_sq < 1e-10f) continue;
+        float dist = 1;
         
         float force = 0.0f;
-        float dist = sqrt(dist_sq);
         
         if (dist_sq <= min_dist_sq) {
+            dist = sqrt(dist_sq);
             force = (dist - min_dist) * 5.0f;
         } else if (dist_sq <= max_dist_sq) {
+            dist = sqrt(dist_sq);
             float f = force_matrix[types[j] * type_count + types[i]];
             force = f * ((max_dist/2.0f - fabs(max_dist/2.0f - (dist - min_dist))) / (max_dist/2.0f));
         }
         
-        if (dist < max_dist) {
+        if (dist_sq <= max_dist_sq) {
             local_n += 1;
             if (types[i] == types[j]) {
-                local_density += 1.0f - (dist / max_dist);
+                local_density += 1.0f - dist / max_dist;
             } else {
                 local_density += 0.5f * (1.0f - dist / max_dist);
             }
@@ -65,9 +67,10 @@ __kernel void update(
         fx_total += norm_x * force;
         fy_total += norm_y * force;
     }
+
+    local_density /= local_n;
     
-    // float density_factor = min(max(0.0f, local_density - density_limit), 1.005f);
-    float density_factor = 1.0f;
+    float density_factor = 1.0f - min(max(0.0f, local_density - density_limit), 1.005f);
     
     fx_total *= density_factor;
     fy_total *= density_factor;
@@ -77,6 +80,9 @@ __kernel void update(
 
     velocities[i].x *= velocity_damping;
     velocities[i].y *= velocity_damping;
+
+    velocities[i].x = min(max(velocities[i].x, -max_dist), max_dist);
+    velocities[i].y = min(max(velocities[i].y, -max_dist), max_dist);
 
     positions[i].x += velocities[i].x;
     positions[i].y += velocities[i].y;

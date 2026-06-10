@@ -52,8 +52,8 @@ screen_height = 1100
 
 # Interaction limits
 max_dist = 120
-min_dist = 4
-density_limit = 0.2
+min_dist = 5
+density_limit = 0.3
 
 camera = [(screen_width - world_width) / 2, (screen_height - world_height) / 2]
 
@@ -64,7 +64,7 @@ r = 1
 force_scale = 0.01
 velocity_damping = 0.9
 
-type_count = 12
+type_count = 10
 colours = np.random.uniform(0,255, (type_count, 3))
 
 pygame.init()
