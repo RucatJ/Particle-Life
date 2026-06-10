@@ -7,6 +7,18 @@ device = platform.get_devices()[0]
 ctx = cl.Context([device])
 queue = cl.CommandQueue(ctx)
 
+seed = input("Select seed: ")
+if not seed:
+    seed = np.random.randint(0, 999999999)
+else:
+    try:
+        seed = int(seed)
+    except ValueError:
+        print("That's not an integer")
+        quit()
+
+print(f"Seed: {seed}")
+np.random.seed(seed)
 
 # list things
 for p in cl.get_platforms():
@@ -25,16 +37,17 @@ screen_height = 1100
 # Interaction limits
 max_dist = 200
 min_dist = 4
+density_limit = 0.2
 
 camera = [(screen_width - world_width) / 2, (screen_height - world_height) / 2]
 
-n = 5000
+n = 8000
 background_colour = (20,20,40)
 world_colour = (40, 40, 80,)
 r = 1
 force_scale = 0.01
 
-type_count = 8
+type_count = 12
 colours = np.random.uniform(0,255, (type_count, 3))
 
 pygame.init()
@@ -107,7 +120,8 @@ __kernel void update(
     float max_dist,
     float min_dist,
     int type_count,
-    float force_scale
+    float force_scale,
+    float density_limit
 ) {
     int i = get_global_id(0);
     if (i >= n) return;
@@ -115,6 +129,9 @@ __kernel void update(
     float2 pi = positions[i];
     float fx_total = 0.0f;
     float fy_total = 0.0f;
+    
+    float local_density = 0.0f;
+    float local_n = 0;
     
     for (int j = 0; j < n; j++) {
         if (i == j) continue;
@@ -140,12 +157,28 @@ __kernel void update(
             force = f * ((max_dist/2.0f - fabs(max_dist/2.0f - (dist - min_dist))) / (max_dist/2.0f));
         }
         
+        if (dist < max_dist) {
+            local_n += 1;
+            if (types[i] == types[j]) {
+                local_density += 1.0f - (dist / max_dist);
+            } else {
+                local_density += 0.5f * (1.0f - dist / max_dist);
+            }
+        }
+        
         float norm_x = dx / dist;
         float norm_y = dy / dist;
         
         fx_total += norm_x * force;
         fy_total += norm_y * force;
     }
+    
+    local_density /= local_n;
+    
+    float density_factor = 1.0f - min(max(0.0f, local_density - density_limit), 1.005f);
+    
+    fx_total *= density_factor;
+    fy_total *= density_factor;
     
     velocities[i].x += fx_total * force_scale;
     velocities[i].y += fy_total * force_scale;
@@ -216,7 +249,8 @@ while running:
         np.float32(max_dist),
         np.float32(min_dist),
         np.int32(type_count),
-        np.float32(force_scale)
+        np.float32(force_scale),
+        np.float32(density_limit)
     )
 
     cl.enqueue_copy(queue, vel32, vel_buf)
@@ -267,9 +301,9 @@ while running:
     cl.enqueue_copy(queue, pos_buf, pos32)
 
     fps = round(clock.get_fps())
-    fps_text = font.render(f"FPS: {str(fps)}", True, (255,255,255))
+    stats_text = font.render(f"FPS: {str(fps)} Seed: {seed}", True, (255,255,255))
 
-    screen.blit(fps_text, (5, 5))
+    screen.blit(stats_text, (5, 5))
 
     # Update screen
     pygame.display.update()
